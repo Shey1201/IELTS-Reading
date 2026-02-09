@@ -595,6 +595,7 @@ export function modifyIframeContent(win, isSingleArticle = false) {
                 inp.style.accentColor = '';
                 inp.style.outline = '';
                 inp.style.outlineOffset = '';
+                inp.style.boxShadow = '';
               }
               if (label) {
                 label.style.backgroundColor = '';

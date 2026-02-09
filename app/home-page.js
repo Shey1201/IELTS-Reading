@@ -1153,7 +1153,6 @@ function getAllArticles(config) {
   Object.entries(config.passages).forEach(([passageKey, passage]) => {
     Object.entries(passage.levels).forEach(([levelName, level]) => {
       level.articles.forEach(article => {
-        if (String(article.title || "").startsWith("(删)")) return;
         items.push({
           passageKey,
           passageIcon: passage.icon,
@@ -1177,8 +1176,7 @@ function incrementAttempts(id) {
 function buildVolumeSets(articles) {
   const filtered = articles.filter(
     a =>
-      (a.levelName === "高频" || a.levelName === "次高频") &&
-      !String(a.title || "").startsWith("(删)")
+      (a.levelName === "高频" || a.levelName === "次高频")
   );
   const byPassage = {
     P1: [],
