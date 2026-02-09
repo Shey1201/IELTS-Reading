@@ -1597,12 +1597,14 @@ export default function HomePage() {
     filtered.forEach(a => {
       if (!result[a.passageKey]) {
         result[a.passageKey] = {
+          key: a.passageKey, // Add a key for the passage group
           icon: a.passageIcon,
           levels: {}
         };
       }
       if (!result[a.passageKey].levels[a.levelName]) {
         result[a.passageKey].levels[a.levelName] = {
+          key: `${a.passageKey}-${a.levelName}`, // Add a key for the level group
           icon: a.levelIcon,
           articles: []
         };
@@ -2138,13 +2140,13 @@ export default function HomePage() {
       ) : hasResult ? (
         <div className="content-grid">
           {Object.entries(grouped).map(([passageKey, passage]) => (
-            <div key={passageKey} className="passage-card">
+            <div key={passage.key || passageKey} className="passage-card">
               <h2>
                 <span className="passage-icon">{passage.icon}</span>
                 {passageKey}
               </h2>
               {Object.entries(passage.levels).map(([levelName, level]) => (
-                <div key={levelName} className="level-group">
+                <div key={level.key || levelName} className="level-group">
                   <div className="level-header">
                     <span className="level-icon">{level.icon}</span>
                     <span className="level-title">{levelName}</span>
