@@ -134,6 +134,10 @@ export function modifyIframeContent(win, isSingleArticle = false) {
         window.parent.postMessage({ type: 'IELTS_TEST_UPDATE', subType: type, payload: payload }, '*');
       }
 
+      function normalizeText(s) {
+        return String(s == null ? '').toLowerCase().replace(/\\s+/g, ' ').trim();
+      }
+
       // Listen for messages from parent
       window.addEventListener('message', function(e) {
           if (!e.data || e.data.type !== 'IELTS_PARENT_ACTION') return;
@@ -143,7 +147,8 @@ export function modifyIframeContent(win, isSingleArticle = false) {
                   document.querySelector('input[name="' + qid + '"]') ||
                   document.querySelector('input[name^="' + qid + '"]') ||
                   document.getElementById(qid) ||
-                  document.querySelector('input[id^="' + qid + '"]');
+                  document.querySelector('input[id^="' + qid + '"]') ||
+                  document.querySelector('.summary-input[data-q="' + qid + '"]');
               if (target) {
                   target.scrollIntoView({ behavior: 'smooth', block: 'center' });
                   var container = target.closest('tr') || target.closest('div.question') || target.closest('.question-block') || target.parentElement;
@@ -351,8 +356,10 @@ export function modifyIframeContent(win, isSingleArticle = false) {
              var text = document.querySelector(
                  'input[name="' + qId + '"][type="text"], input[name^="' + qId + '"][type="text"], input[id="' + qId + '"][type="text"], input[id^="' + qId + '"][type="text"]'
              );
+             var summaryInput = document.querySelector('.summary-input[data-q="' + qId + '"]');
+             var dropzone = document.querySelector('.summary-dropzone[data-q="' + qId + '"], .match-dropzone[data-q="' + qId + '"]');
              
-             var hasInteractive = (inputs && inputs.length > 0) || !!text;
+             var hasInteractive = (inputs && inputs.length > 0) || !!text || !!summaryInput || !!dropzone;
              if (!hasInteractive) {
                  var flag = document.querySelector('.flag-btn[data-q="' + qId + '"]');
                  if (!flag) return;
@@ -395,6 +402,24 @@ export function modifyIframeContent(win, isSingleArticle = false) {
                       });
                   }
              });
+
+             if (summaryInput) {
+                 var handlerText = function(e) {
+                     var hasVal = !!summaryInput.value.trim();
+                     notifyParent('ANSWER_UPDATE', { id: qId, hasAnswer: hasVal });
+                 };
+                 summaryInput.addEventListener('change', handlerText);
+                 summaryInput.addEventListener('input', handlerText);
+             }
+
+             if (dropzone) {
+                 // Use a MutationObserver to detect text changes in dropzones
+                 var observer = new MutationObserver(function() {
+                     var hasVal = !!dropzone.textContent.trim() && dropzone.textContent.trim() !== dropzone.dataset.q;
+                     notifyParent('ANSWER_UPDATE', { id: qId, hasAnswer: hasVal });
+                 });
+                 observer.observe(dropzone, { childList: true, characterData: true, subtree: true });
+             }
           });
           
           if (visibleQuestionIds.length) {
@@ -416,7 +441,7 @@ export function modifyIframeContent(win, isSingleArticle = false) {
             d.querySelector('input[name^="' + id + '"]') ||
             d.getElementById(id) ||
             d.querySelector('input[id^="' + id + '"]') ||
-            d.querySelector('.summary-dropzone[data-q="' + id + '"], .match-dropzone[data-q="' + id + '"]');
+            d.querySelector('.summary-dropzone[data-q="' + id + '"], .match-dropzone[data-q="' + id + '"], .summary-input[data-q="' + id + '"]');
 
           if (baseInput && baseInput.closest) {
             container =
@@ -466,7 +491,7 @@ export function modifyIframeContent(win, isSingleArticle = false) {
           }
 
           var textInputs = d.querySelectorAll(
-            'input[name="' + id + '"][type="text"], input[name^="' + id + '"][type="text"], input[id="' + id + '"][type="text"], input[id^="' + id + '"][type="text"]'
+            'input[name="' + id + '"][type="text"], input[name^="' + id + '"][type="text"], input[id="' + id + '"][type="text"], input[id^="' + id + '"][type="text"], .summary-input[data-q="' + id + '"]'
           );
           var radios = d.querySelectorAll(
             'input[name="' + id + '"][type="radio"], input[name^="' + id + '"][type="radio"]'
@@ -589,22 +614,26 @@ export function modifyIframeContent(win, isSingleArticle = false) {
               var isChecked = !!input.checked;
 
               if (isCorrectOption) {
-                var color = questionCorrect ? correctColor : wrongColor;
-                var bgColor = questionCorrect ? '#f6ffed' : '#fee2e2';
-                
+                // Correct option always highlighted in green
                 if (lbl) {
-                    lbl.style.backgroundColor = bgColor;
+                    lbl.style.backgroundColor = '#f6ffed';
                     lbl.style.borderRadius = '4px';
-                    lbl.style.color = color;
+                    lbl.style.color = correctColor;
                     lbl.style.fontWeight = 'bold';
                 }
-                input.style.accentColor = color;
+                input.style.accentColor = correctColor;
                 // Add ring for unchecked correct answers to make them visible
                 if (!isChecked) {
-                     input.style.boxShadow = '0 0 0 1px ' + color;
+                     input.style.boxShadow = '0 0 0 1px ' + correctColor;
                 }
               } else if (isChecked) {
+                // User's wrong choice highlighted in red
                 input.style.accentColor = wrongColor; 
+                if (lbl) {
+                    lbl.style.backgroundColor = '#fee2e2';
+                    lbl.style.borderRadius = '4px';
+                    lbl.style.color = wrongColor;
+                }
               }
             }
           };
@@ -657,7 +686,8 @@ export function modifyIframeContent(win, isSingleArticle = false) {
                   d.querySelector('input[name="' + q + '"][type="text"]') ||
                   d.querySelector('input[name^="' + q + '"][type="text"]') ||
                   d.querySelector('input[id="' + q + '"][type="text"]') ||
-                  d.querySelector('input[id^="' + q + '"][type="text"]');
+                  d.querySelector('input[id^="' + q + '"][type="text"]') ||
+                  d.querySelector('.summary-input[data-q="' + q + '"]');
                 if (text) {
                   if (text.disabled) {
                     var stored = text.getAttribute('data-user-answer');
@@ -703,7 +733,8 @@ export function modifyIframeContent(win, isSingleArticle = false) {
                 d.querySelector('input[name="' + q + '"][type="text"]') ||
                 d.querySelector('input[name^="' + q + '"][type="text"]') ||
                 d.querySelector('input[id="' + q + '"][type="text"]') ||
-                d.querySelector('input[id^="' + q + '"][type="text"]');
+                d.querySelector('input[id^="' + q + '"][type="text"]') ||
+                d.querySelector('.summary-input[data-q="' + q + '"]');
               
               var hasVal = false;
               
@@ -750,7 +781,7 @@ export function modifyIframeContent(win, isSingleArticle = false) {
                 });
               }
             } else if (uA) {
-              if (String(uA).toLowerCase() === String(cA).toLowerCase()) correct = true;
+              if (normalizeText(uA) === normalizeText(cA)) correct = true;
             }
             res.push({ id: q, userAns: uA, correctAns: cA, isCorrect: correct });
           });
