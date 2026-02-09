@@ -1175,8 +1175,7 @@ function incrementAttempts(id) {
 
 function buildVolumeSets(articles) {
   const filtered = articles.filter(
-    a =>
-      (a.levelName === "高频" || a.levelName === "次高频")
+    a => (a.levelName === "高频" || a.levelName === "次高频")
   );
   const byPassage = {
     P1: [],

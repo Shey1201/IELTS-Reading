@@ -134,10 +134,6 @@ export function modifyIframeContent(win, isSingleArticle = false) {
         window.parent.postMessage({ type: 'IELTS_TEST_UPDATE', subType: type, payload: payload }, '*');
       }
 
-      function normalizeText(s) {
-        return String(s == null ? '').toLowerCase().replace(/\\s+/g, ' ').trim();
-      }
-
       // Listen for messages from parent
       window.addEventListener('message', function(e) {
           if (!e.data || e.data.type !== 'IELTS_PARENT_ACTION') return;
@@ -147,8 +143,7 @@ export function modifyIframeContent(win, isSingleArticle = false) {
                   document.querySelector('input[name="' + qid + '"]') ||
                   document.querySelector('input[name^="' + qid + '"]') ||
                   document.getElementById(qid) ||
-                  document.querySelector('input[id^="' + qid + '"]') ||
-                  document.querySelector('.summary-input[data-q="' + qid + '"]');
+                  document.querySelector('input[id^="' + qid + '"]');
               if (target) {
                   target.scrollIntoView({ behavior: 'smooth', block: 'center' });
                   var container = target.closest('tr') || target.closest('div.question') || target.closest('.question-block') || target.parentElement;
@@ -356,10 +351,8 @@ export function modifyIframeContent(win, isSingleArticle = false) {
              var text = document.querySelector(
                  'input[name="' + qId + '"][type="text"], input[name^="' + qId + '"][type="text"], input[id="' + qId + '"][type="text"], input[id^="' + qId + '"][type="text"]'
              );
-             var summaryInput = document.querySelector('.summary-input[data-q="' + qId + '"]');
-             var dropzone = document.querySelector('.summary-dropzone[data-q="' + qId + '"], .match-dropzone[data-q="' + qId + '"]');
              
-             var hasInteractive = (inputs && inputs.length > 0) || !!text || !!summaryInput || !!dropzone;
+             var hasInteractive = (inputs && inputs.length > 0) || !!text;
              if (!hasInteractive) {
                  var flag = document.querySelector('.flag-btn[data-q="' + qId + '"]');
                  if (!flag) return;
@@ -402,24 +395,6 @@ export function modifyIframeContent(win, isSingleArticle = false) {
                       });
                   }
              });
-
-             if (summaryInput) {
-                 var handlerText = function(e) {
-                     var hasVal = !!summaryInput.value.trim();
-                     notifyParent('ANSWER_UPDATE', { id: qId, hasAnswer: hasVal });
-                 };
-                 summaryInput.addEventListener('change', handlerText);
-                 summaryInput.addEventListener('input', handlerText);
-             }
-
-             if (dropzone) {
-                 // Use a MutationObserver to detect text changes in dropzones
-                 var observer = new MutationObserver(function() {
-                     var hasVal = !!dropzone.textContent.trim() && dropzone.textContent.trim() !== dropzone.dataset.q;
-                     notifyParent('ANSWER_UPDATE', { id: qId, hasAnswer: hasVal });
-                 });
-                 observer.observe(dropzone, { childList: true, characterData: true, subtree: true });
-             }
           });
           
           if (visibleQuestionIds.length) {
@@ -431,25 +406,25 @@ export function modifyIframeContent(win, isSingleArticle = false) {
         if (!res || !Array.isArray(res) || res.length === 0) return;
         var d = document;
 
-        res.forEach(function (r) {
-          if (!r || !r.id) return;
-          var id = r.id;
+          res.forEach(function (r) {
+            if (!r || !r.id) return;
+            var id = r.id;
 
-          var container = null;
-          var baseInput =
-            d.querySelector('input[name="' + id + '"]') ||
-            d.querySelector('input[name^="' + id + '"]') ||
-            d.getElementById(id) ||
-            d.querySelector('input[id^="' + id + '"]') ||
-            d.querySelector('.summary-dropzone[data-q="' + id + '"], .match-dropzone[data-q="' + id + '"], .summary-input[data-q="' + id + '"]');
+            var container = null;
+            var baseInput =
+              d.querySelector('input[name="' + id + '"]') ||
+              d.querySelector('input[name^="' + id + '"]') ||
+              d.getElementById(id) ||
+              d.querySelector('input[id^="' + id + '"]') ||
+              d.querySelector('.summary-dropzone[data-q="' + id + '"], .match-dropzone[data-q="' + id + '"], .summary-input[data-q="' + id + '"]');
 
-          if (baseInput && baseInput.closest) {
-            container =
-              baseInput.closest('tr') ||
-              baseInput.closest('div.question') ||
-              baseInput.closest('.question-block') ||
-              ((baseInput.classList.contains('match-dropzone') || baseInput.classList.contains('summary-dropzone')) ? baseInput : baseInput.parentElement);
-          }
+            if (baseInput && baseInput.closest) {
+              container =
+                baseInput.closest('tr') ||
+                baseInput.closest('div.question') ||
+                baseInput.closest('.question-block') ||
+                ((baseInput.classList.contains('match-dropzone') || baseInput.classList.contains('summary-dropzone') || baseInput.classList.contains('summary-input')) ? baseInput : baseInput.parentElement);
+            }
 
           if (!container) return;
 
@@ -499,9 +474,14 @@ export function modifyIframeContent(win, isSingleArticle = false) {
           var checkboxes = d.querySelectorAll(
             'input[name="' + id + '"][type="checkbox"], input[name^="' + id + '"][type="checkbox"]'
           );
-          // Drag and Drop Zone
-          var dropzone = d.querySelector('.summary-dropzone[data-q="' + id + '"], .match-dropzone[data-q="' + id + '"]');
+          // Drag and Drop Zone or Summary Input
+          var dropzone = d.querySelector('.summary-dropzone[data-q="' + id + '"], .match-dropzone[data-q="' + id + '"], .summary-input[data-q="' + id + '"]');
           
+          if (dropzone && dropzone.tagName === 'INPUT') {
+            // It's a summary input, will be handled by textInputs logic below
+            dropzone = null; 
+          }
+
           if (!dropzone) container.style.backgroundColor = 'transparent';
 
           var correctList = [];
@@ -595,7 +575,6 @@ export function modifyIframeContent(win, isSingleArticle = false) {
                 inp.style.accentColor = '';
                 inp.style.outline = '';
                 inp.style.outlineOffset = '';
-                inp.style.boxShadow = '';
               }
               if (label) {
                 label.style.backgroundColor = '';
@@ -615,26 +594,22 @@ export function modifyIframeContent(win, isSingleArticle = false) {
               var isChecked = !!input.checked;
 
               if (isCorrectOption) {
-                // Correct option always highlighted in green
+                var color = questionCorrect ? correctColor : wrongColor;
+                var bgColor = questionCorrect ? '#f6ffed' : '#fee2e2';
+                
                 if (lbl) {
-                    lbl.style.backgroundColor = '#f6ffed';
+                    lbl.style.backgroundColor = bgColor;
                     lbl.style.borderRadius = '4px';
-                    lbl.style.color = correctColor;
+                    lbl.style.color = color;
                     lbl.style.fontWeight = 'bold';
                 }
-                input.style.accentColor = correctColor;
+                input.style.accentColor = color;
                 // Add ring for unchecked correct answers to make them visible
                 if (!isChecked) {
-                     input.style.boxShadow = '0 0 0 1px ' + correctColor;
+                     input.style.boxShadow = '0 0 0 1px ' + color;
                 }
               } else if (isChecked) {
-                // User's wrong choice highlighted in red
                 input.style.accentColor = wrongColor; 
-                if (lbl) {
-                    lbl.style.backgroundColor = '#fee2e2';
-                    lbl.style.borderRadius = '4px';
-                    lbl.style.color = wrongColor;
-                }
               }
             }
           };
@@ -687,8 +662,7 @@ export function modifyIframeContent(win, isSingleArticle = false) {
                   d.querySelector('input[name="' + q + '"][type="text"]') ||
                   d.querySelector('input[name^="' + q + '"][type="text"]') ||
                   d.querySelector('input[id="' + q + '"][type="text"]') ||
-                  d.querySelector('input[id^="' + q + '"][type="text"]') ||
-                  d.querySelector('.summary-input[data-q="' + q + '"]');
+                  d.querySelector('input[id^="' + q + '"][type="text"]');
                 if (text) {
                   if (text.disabled) {
                     var stored = text.getAttribute('data-user-answer');
@@ -700,13 +674,17 @@ export function modifyIframeContent(win, isSingleArticle = false) {
               }
               
               if (!uA) {
-                  var dz = d.querySelector('.summary-dropzone[data-q="' + q + '"], .match-dropzone[data-q="' + q + '"]');
+                  var dz = d.querySelector('.summary-dropzone[data-q="' + q + '"], .match-dropzone[data-q="' + q + '"], .summary-input[data-q="' + q + '"]');
                   if (dz) {
-                      var child = dz.querySelector('.match-option');
-                      if (child) {
-                          uA = child.getAttribute('data-value') || child.innerText.trim();
+                      if (dz.tagName === 'INPUT') {
+                          uA = (dz.value || '').trim();
                       } else {
-                          uA = dz.innerText.trim();
+                          var child = dz.querySelector('.match-option');
+                          if (child) {
+                              uA = child.getAttribute('data-value') || child.innerText.trim();
+                          } else {
+                              uA = dz.innerText.trim();
+                          }
                       }
                   }
               }
@@ -734,8 +712,7 @@ export function modifyIframeContent(win, isSingleArticle = false) {
                 d.querySelector('input[name="' + q + '"][type="text"]') ||
                 d.querySelector('input[name^="' + q + '"][type="text"]') ||
                 d.querySelector('input[id="' + q + '"][type="text"]') ||
-                d.querySelector('input[id^="' + q + '"][type="text"]') ||
-                d.querySelector('.summary-input[data-q="' + q + '"]');
+                d.querySelector('input[id^="' + q + '"][type="text"]');
               
               var hasVal = false;
               
@@ -772,9 +749,14 @@ export function modifyIframeContent(win, isSingleArticle = false) {
             var uA = userMap[q];
             var cA = answerKey[q];
             var correct = false;
+            
+            function normalize(s) {
+              return String(s || "").toLowerCase().trim().replace(/\s+/g, ' ');
+            }
+
             if (Array.isArray(cA)) {
-              var setUser = new Set(String(uA).split(',').map(function (v) { return v.trim().toLowerCase(); }).filter(Boolean));
-              var setCorrect = new Set(cA.map(function (v) { return String(v).toLowerCase(); }));
+              var setUser = new Set(String(uA).split(',').map(function (v) { return normalize(v); }).filter(Boolean));
+              var setCorrect = new Set(cA.map(function (v) { return normalize(v); }));
               if (setUser.size === setCorrect.size) {
                 correct = true;
                 setCorrect.forEach(function (v) {
@@ -782,7 +764,7 @@ export function modifyIframeContent(win, isSingleArticle = false) {
                 });
               }
             } else if (uA) {
-              if (normalizeText(uA) === normalizeText(cA)) correct = true;
+              if (normalize(uA) === normalize(cA)) correct = true;
             }
             res.push({ id: q, userAns: uA, correctAns: cA, isCorrect: correct });
           });
