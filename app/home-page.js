@@ -1150,16 +1150,20 @@ function getAttempts(id) {
 
 function getAllArticles(config) {
   const items = [];
+  const seenIds = new Set();
   Object.entries(config.passages).forEach(([passageKey, passage]) => {
     Object.entries(passage.levels).forEach(([levelName, level]) => {
       level.articles.forEach(article => {
-        items.push({
-          passageKey,
-          passageIcon: passage.icon,
-          levelName,
-          levelIcon: level.icon,
-          ...article
-        });
+        if (!seenIds.has(article.id)) {
+          seenIds.add(article.id);
+          items.push({
+            passageKey,
+            passageIcon: passage.icon,
+            levelName,
+            levelIcon: level.icon,
+            ...article
+          });
+        }
       });
     });
   });
@@ -1188,17 +1192,20 @@ function buildVolumeSets(articles) {
     }
   });
   
-  // Sort by Level (High > Medium) then by ID
+  // Sort by Level (High > Medium) then by Index
   Object.keys(byPassage).forEach(key => {
     byPassage[key].sort((a, b) => {
       // Priority: 高频 > 次高频
       if (a.levelName === "高频" && b.levelName !== "高频") return -1;
       if (a.levelName !== "高频" && b.levelName === "高频") return 1;
       
-      // Then by ID
-      if (a.id < b.id) return -1;
-      if (a.id > b.id) return 1;
-      return 0;
+      // Then by Index from title
+      const aMatch = a.title.match(/(?:\(删\))?(\d+)\./);
+      const bMatch = b.title.match(/(?:\(删\))?(\d+)\./);
+      const aIndex = aMatch ? parseInt(aMatch[1], 10) : Infinity;
+      const bIndex = bMatch ? parseInt(bMatch[1], 10) : Infinity;
+      
+      return aIndex - bIndex;
     });
   });
 
@@ -1487,7 +1494,7 @@ export default function HomePage() {
       else if (attempts > 0) status = "进行中";
       
       // Extract clean title (remove leading number like "1.")
-      const cleanTitle = a.title.replace(/^\d+\./, '').trim();
+      const cleanTitle = a.title.replace(/^(?:\(删\))?\d+\./, '').trim();
       
       // Parse correct/total from scoreText if available
       let correctCount = 0;
@@ -1501,7 +1508,7 @@ export default function HomePage() {
       }
 
       // Parse index from title (e.g. "1.Title" -> 1, "(删)10.Title" -> 10)
-      const titleMatch = a.title.match(/^(?:\(删\))?(\d+)\./);
+      const titleMatch = a.title.match(/(?:\(删\))?(\d+)\./);
       const articleIndex = titleMatch ? parseInt(titleMatch[1], 10) : (index + 1);
 
       return {
@@ -2155,9 +2162,9 @@ export default function HomePage() {
                     </span>
                   </div>
                   <div className="article-list">
-                    {level.articles.map(article => (
+                    {level.articles.map((article, idx) => (
                       <div
-                        key={article.id}
+                        key={`${article.id}-${article.levelName}-${idx}`}
                         className="article-item"
                         onClick={() => handleOpenArticle(article)}
                         style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
@@ -2405,13 +2412,13 @@ export default function HomePage() {
               <span className="stats-col-progress" style={{width: '100px', textAlign: 'center'}}>正确率</span>
               <span style={{width: '240px', textAlign: 'center'}}>操作</span>
             </div>
-            {(articleStatsByPassage[activeStatsTab] || []).map((row) => {
+            {(articleStatsByPassage[activeStatsTab] || []).map((row, idx) => {
                const accuracyStr = row.accuracy !== null ? Math.round(row.accuracy * 100) + '%' : '-';
                const hasResult = !!row.score; 
                const correctTotalStr = row.score ? `${row.correctCount}/${row.totalCount}` : '-';
                
                return (
-                 <div key={row.id} className="stats-row" style={{cursor: 'default', display: 'flex', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #f1f5f9'}}>
+                 <div key={`${row.id}-${idx}`} className="stats-row" style={{cursor: 'default', display: 'flex', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #f1f5f9'}}>
                     <span className="stats-col-index" style={{width: '60px', textAlign: 'center'}}>{row.index}</span>
                     <span style={{flex: 1, paddingLeft: '10px'}}>
                       {row.cleanTitle}
